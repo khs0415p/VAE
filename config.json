@@ -1,0 +1,20 @@
+{
+    "data_path": "./data",
+    "img_path": "./result",
+    "model_name": "VAE_noise_10epochs",
+    "log_interval": 100,
+    "grayscale": 1,
+
+    "denoising": 1,
+    "noise_mean": 0,
+    "noise_std": 10,
+
+    "lr": 1e-4,
+    "epochs": 10,
+    "val_propotion": 0.1,
+    "batch_size": 16,
+
+    "hidden_dim": 500,
+    "latent_dim": 20,
+    "dropout": 0.1
+}
