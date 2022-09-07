@@ -7,10 +7,10 @@
 
     "denoising": 1,
     "noise_mean": 0,
-    "noise_std": 10,
+    "noise_std": 3,
 
-    "lr": 1e-4,
-    "epochs": 10,
+    "lr": 1e-3,
+    "epochs": 60,
     "val_propotion": 0.1,
     "batch_size": 16,
 

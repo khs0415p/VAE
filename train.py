@@ -1,6 +1,7 @@
 import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from PIL import Image
 import os
 
 import torch
@@ -9,8 +10,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 import numpy as np
+from sklearn.manifold import TSNE
 
-from func import save_model
+from func import save_model, make_z
 from model import VAE
 
 torch.manual_seed(999)
@@ -184,7 +186,7 @@ class Trainer:
         self.model.eval()
         total_loss = 0.
         
-        X, noise_X, outputs = [], [], []
+        X, noise_X, outputs, total_mean, total_log_var, total_label = [], [], [], [], [], []
         for batch in tqdm(self.dataloaders['test'], desc='testing', total=len(self.dataloaders['test'])):
             x, label = batch[0], batch[1].to(self.device)
             self.optimizer.zero_grad()
@@ -204,6 +206,9 @@ class Trainer:
                 X.append(x.detach().cpu())
             
             outputs.append(logits.detach().cpu())
+            total_mean.append(mean.detach().cpu())
+            total_log_var.append(log_var.detach().cpu())
+            total_label.append(label.detach().cpu())
             
             loss = self.criterion(logits, x, mean, log_var)
             total_loss += (loss.item() * x.size(0))
@@ -212,6 +217,9 @@ class Trainer:
 
         X = torch.cat(tuple(X), dim=0)
         outputs = torch.cat(tuple(outputs), dim=0)
+        total_mean = torch.cat(tuple(total_mean), dim=0)
+        total_log_var = torch.cat(tuple(total_log_var), dim=0)
+        total_label = torch.cat(tuple(total_label), dim=0)
 
 
         plt.figure(figsize=(6, 3*img_num))
@@ -247,3 +255,61 @@ class Trainer:
                 plt.imshow(output, cmap='gray')
         
         plt.savefig(os.path.join('./result', self.model_name, self.model_name))
+
+        # manifold
+        z = make_z(total_mean, total_log_var)
+        tsne = TSNE()
+
+        data_2D = tsne.fit_transform(z)
+        # min-max normalization
+        data_2D = (data_2D-data_2D.min()) / (data_2D.max() - data_2D.min())
+
+        plt.figure(figsize=(8, 6))
+        
+        base = plt.cm.get_cmap('jet')
+        c_list = base(np.linspace(0,1,10))
+        cmap_name = base.name + str(10)
+        plt.scatter(data_2D[:, 0], data_2D[:, 1], c=total_label, cmap=base.from_list(cmap_name, c_list, 10))
+        plt.colorbar(ticks=range(10))
+        axes = plt.gca()
+        axes.set_xlim([0, 1])
+        axes.set_ylim([0, 1])
+        plt.grid(True)
+        
+        plt.savefig(os.path.join('./result', self.model_name, self.model_name + '_2D'))
+
+        # latent vector
+        # 1 -> 7
+
+        first_ids = np.where(total_label==1)
+        second_ids = np.where(total_label==7)
+
+        start, end = np.mean(z[first_ids], axis=0), np.mean(z[second_ids], axis=0)
+
+        z_data = []
+        for a in (np.linspace(0, 1, 20)):
+            z_data.append(start*(1-a) + end*a)
+        
+        z_data = torch.from_numpy(np.array(z_data)).to(self.device)
+        output = self.model.decoder(z_data)
+        output = output.view(20, 1, 28, 28).detach().cpu()
+        
+        plt.figure(figsize=(5,5))
+        for i in range(20):
+            plt.imshow(output[i].permute(1,2,0))
+            plt.savefig(os.path.join('./result', self.model_name, "res"+str(i)))
+
+        # save gif
+
+        img_list = os.listdir(os.path.join('./result', self.model_name))
+        img_list = [os.path.join('./result', self.model_name, x) for x in img_list if x.startswith('res')]
+        img_list = sorted(img_list, key = lambda x:int(x[x.rfind('/')+4: x.rfind('.')]))
+
+        imgs = [Image.open(x) for x in img_list]
+        im = imgs[0]
+        im.save(os.path.join('./result', self.model_name, 'out.gif'), save_all=True, append_images=imgs[1:], loop=0, duration=300)
+
+
+        # rm res png
+        for png_img in img_list:
+            os.remove(png_img)
