@@ -1,0 +1,17 @@
+# data
+data/
+
+# loss
+loss/
+
+# model
+model/
+
+# result
+result/
+
+# cache
+__pycache__
+
+# test
+test.*
